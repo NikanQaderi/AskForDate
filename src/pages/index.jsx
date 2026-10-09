@@ -7,15 +7,23 @@ import QuestionTwo from "./question2";
 import QuestionThree from "./question3";
 import QuestionFour from "./ending";
 import Final from "./final";
+
+import { submitFinalAnswers } from "../core/services/final";
 function Main() {
     const [step, setStep] = useState(1);
 
     const [answers, setAnswers] = useState({
         accepted: false,
         place: "",
+        placeId: null,
         food: "",
+        foodId: null,
         date: "",
     });
+
+    const [submitting, setSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState("");
+    const [submitResult, setSubmitResult] = useState(null);
 
     function updateAnswer(key, value) {
         setAnswers((prev) => ({
@@ -32,6 +40,49 @@ function Main() {
         setStep((prev) => Math.max(prev - 1, 1));
     }
 
+    async function handleFinalize() {
+        if (submitting) return;
+
+        if (
+            answers.placeId == null ||
+            answers.foodId == null ||
+            !answers.date
+        ) {
+            setSubmitError("لطفاً مکان، غذا و تاریخ را انتخاب کن.");
+            return;
+        }
+
+        setSubmitting(true);
+        setSubmitError("");
+        setSubmitResult(null);
+
+        try {
+            const result = await submitFinalAnswers({
+                phase_one: answers.placeId,
+                phase_two: answers.foodId,
+                phase_date: answers.date,
+            });
+
+            setSubmitResult(result);
+
+            if (result.status === true) {
+                // درخواست با موفقیت توسط بک‌اند پذیرفته شد.
+                console.log("Finalize successful:", result);
+            } else {
+                setSubmitError(
+                    "بک‌اند درخواست را تأیید نکرد. لطفاً اطلاعات را بررسی کن.",
+                );
+            }
+        } catch (error) {
+            console.error("Finalize error:", error);
+            setSubmitError(
+                "ارسال اطلاعات ناموفق بود. اتصال و تنظیمات API را بررسی کن.",
+            );
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
     function renderStep() {
         switch (step) {
             case 1:
@@ -46,7 +97,14 @@ function Main() {
                 return (
                     <QuestionTwo
                         value={answers.place}
-                        onAnswer={(value) => updateAnswer("place", value)}
+                        onAnswer={(value, id) => {
+                            updateAnswer("place", value);
+                            updateAnswer("placeId", id);
+
+                            // با تغییر مکان، غذای قبلی دیگر معتبر نیست.
+                            updateAnswer("food", "");
+                            updateAnswer("foodId", null);
+                        }}
                         onNext={nextStep}
                         onBack={previousStep}
                     />
@@ -57,7 +115,10 @@ function Main() {
                     <QuestionThree
                         value={answers.food}
                         place={answers.place}
-                        onAnswer={(value) => updateAnswer("food", value)}
+                        onAnswer={(value, id) => {
+                            updateAnswer("food", value);
+                            updateAnswer("foodId", id);
+                        }}
                         onNext={nextStep}
                         onBack={previousStep}
                     />
@@ -74,7 +135,15 @@ function Main() {
                 );
 
             case 5:
-                return <Final answers={answers} />;
+                return (
+                    <Final
+                        answers={answers}
+                        onSubmit={handleFinalize}
+                        submitting={submitting}
+                        submitError={submitError}
+                        submitResult={submitResult}
+                    />
+                );
 
             default:
                 return null;
